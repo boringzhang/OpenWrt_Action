@@ -1,0 +1,97 @@
+diff --git a/package/base-files/files/bin/config_generate b/package/base-files/files/bin/config_generate
+index be21d0079a..c21a9d0a84 100755
+--- a/package/base-files/files/bin/config_generate
++++ b/package/base-files/files/bin/config_generate
+@@ -163,6 +163,7 @@ generate_network() {
+ 			local ipad
+ 			case "$1" in
+ 				lan) ipad=${ipaddr:-"192.168.1.1"} ;;
++				wan) ipad="10.14.14.251" ;;
+ 				*) ipad=${ipaddr:-"192.168.$((addr_offset++)).1"} ;;
+ 			esac
+ 
+@@ -311,7 +312,7 @@ generate_static_system() {
+ 	uci -q batch <<-EOF
+ 		delete system.@system[0]
+ 		add system system
+-		set system.@system[-1].hostname='OpenWrt'
++		set system.@system[-1].hostname='DarSi'
+ 		set system.@system[-1].timezone='UTC'
+ 		set system.@system[-1].ttylogin='0'
+ 		set system.@system[-1].log_size='64'
+diff --git a/package/base-files/files/lib/functions/uci-defaults.sh b/package/base-files/files/lib/functions/uci-defaults.sh
+index 6f395ec24b..0985b303e8 100644
+--- a/package/base-files/files/lib/functions/uci-defaults.sh
++++ b/package/base-files/files/lib/functions/uci-defaults.sh
+@@ -51,7 +51,7 @@ ucidef_set_interface() {
+ 	if ! json_is_a protocol string; then
+ 		case "$network" in
+ 			lan) json_add_string protocol static ;;
+-			wan) json_add_string protocol dhcp ;;
++			wan) json_add_string protocol static ;;
+ 			*) json_add_string protocol none ;;
+ 		esac
+ 	fi
+@@ -83,7 +83,7 @@ ucidef_set_interface_lan() {
+ }
+ 
+ ucidef_set_interface_wan() {
+-	ucidef_set_interface "wan" device "$1" protocol "${2:-dhcp}"
++	ucidef_set_interface "wan" device "$1" protocol "${2:-static}"
+ }
+ 
+ ucidef_set_interfaces_lan_wan() {
+diff --git a/package/network/config/firewall/files/firewall.config b/package/network/config/firewall/files/firewall.config
+index b90ac7af0a..eaa8a06eb8 100644
+--- a/package/network/config/firewall/files/firewall.config
++++ b/package/network/config/firewall/files/firewall.config
+@@ -17,9 +17,9 @@ config zone
+ 	option name		wan
+ 	list   network		'wan'
+ 	list   network		'wan6'
+-	option input		REJECT
++	option input		ACCEPT
+ 	option output		ACCEPT
+-	option forward		REJECT
++	option forward		ACCEPT
+ 	option masq		1
+ 	option mtu_fix		1
+ 
+diff --git a/target/linux/mediatek/image/filogic.mk b/target/linux/mediatek/image/filogic.mk
+index 88b279140c..6b380813ff 100644
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -46,7 +46,7 @@ define Build/mt798x-gpt
+ 			-t 0x2e -N production		-p $(CONFIG_TARGET_ROOTFS_PARTSIZE)M@64M \
+ 		) \
+ 		$(if $(findstring emmc,$1), \
+-			-t 0x2e -N production		-p $(CONFIG_TARGET_ROOTFS_PARTSIZE)M@64M \
++			-t 0x2e -N production		-p $(CONFIG_TARGET_ROOTFS_PARTSIZE)M@44M \
+ 		)
+ 	cat $@.tmp >> $@
+ 	rm $@.tmp
+@@ -233,6 +233,7 @@ define Device/bananapi_bpi-r3
+ 	       emmc-preloader.bin emmc-bl31-uboot.fip \
+ 	       nor-preloader.bin nor-bl31-uboot.fip \
+ 	       sdcard.img.gz \
++	       emmc.img.gz \
+ 	       snand-preloader.bin snand-bl31-uboot.fip
+   ARTIFACT/emmc-preloader.bin	:= mt7986-bl2 emmc-ddr4
+   ARTIFACT/emmc-bl31-uboot.fip	:= mt7986-bl31-uboot bananapi_bpi-r3-emmc
+@@ -257,6 +258,16 @@ define Device/bananapi_bpi-r3
+ 				   pad-to 64M | append-image squashfs-sysupgrade.itb | check-size |\
+ 				) \
+ 				  gzip
++  ARTIFACT/emmc.img.gz        := mt798x-gpt emmc |\
++                                   pad-to 17k | mt7986-bl2 emmc-ddr4 |\
++                                   pad-to 6656k | mt7986-bl31-uboot bananapi_bpi-r3-emmc |\
++                                $(if $(CONFIG_TARGET_ROOTFS_INITRAMFS),\
++                                   pad-to 12M | append-image-stage initramfs-recovery.itb | check-size 44m |\
++                                ) \
++                                $(if $(CONFIG_TARGET_ROOTFS_SQUASHFS),\
++                                   pad-to 44M | append-image squashfs-sysupgrade.itb | check-size |\
++                                ) \
++                                  gzip
+ ifeq ($(DUMP),)
+   IMAGE_SIZE := $$(shell expr 64 + $$(CONFIG_TARGET_ROOTFS_PARTSIZE))m
+ endif
