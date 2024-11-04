@@ -77,7 +77,7 @@ jobs:
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
-        git apply ../bpi-r3.patch
+        git apply $GITHUB_WORKSPACE/bpi-r3.patch
 
     - name: Download package
       id: package
